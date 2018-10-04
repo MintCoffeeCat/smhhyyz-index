@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=0">
+    <!-- <link rel="stylesheet" href="resource/iview/iview.css"> -->
+    <link rel="stylesheet" href="//unpkg.com/iview/dist/styles/iview.css">
+    <style>
+        .header{
+             position:fixed;
+             top:0;
+             z-index:999;
+             background-color: white;
+             border-bottom:1px solid rgb(70, 68, 68);
+             width:100%;
+         }
+         .content{
+             margin-top:120px;
+         }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="header">
+            <i-col offset="2">
+                <i-button @click="back()" type="primary" :disabled="!need_back" style="font-size:16px;margin-top:10px">
+                    返回上级目录
+                </i-button>
+                <i-button type="primary" disabled v-text="total_dir" style="font-size:16px;width:600px;margin-top:10px">
+
+                </i-button>
+                <i-button @click="drawer = true" type="primary" style="font-size:16px;margin-top:10px">
+                    管理
+                </i-button>
+                <dropdown>
+                    <i-button size="large" type="primary" style="margin-top:10px">
+                        筛选
+                        <icon type="ios-arrow-down"></icon>
+                    </i-button>
+                    <dropdown-menu  slot="list">
+                        <dropdown-item @click = "hide('dir')">文件夹</dropdown-item>
+                        <dropdown-item @click = "hide('file')">文件</dropdown-item>
+                    </dropdown-menu>
+                </dropdown>
+                <i-input size="large" v-model="search_content" suffix="ios-search" placeholder="搜索目录下文件..." style="width:300px;margin-top:10px" />
+
+            </i-col>
+            <br>
+        </div>
+        <div class="content">
+            <div v-if="have_dir">
+                <Divider orientation="right" style="font-size:20px">文件夹</Divider>
+                <i-col v-for="d in dir" v-show="d.show" span="5" offset="2">
+                    <card style="margin-top:10px">
+                        <p slot="title">
+                            文件夹名：<span style="margin-left:30px" v-text="d.name"></span>
+                        </p>
+                        <i-button @click="enter(d.name)" type="info">进入</i-button>
+                        <tooltip placement="top" theme="light">
+                            <div slot="content">
+                                <spin fix size="small" v-if="!detail_loaded"></spin>
+                                <p v-text="'名称：\t\t\t\t'+file_detail.name"></p>
+                                <p v-text="'类型：\t\t\t\t'+file_detail.type"></p>
+                                <p v-text="'大小：\t\t\t\t'+file_detail.size"></p>
+                                <p v-text="'创建时间：'+file_detail.time"></p>
+                            </div>
+                            <span @mouseenter="get_info(d.name)">
+                                <i-button style="margin-left:30px" type="success">详情</i-button>
+                            </span>
+                        </tooltip>
+                        <i-button @click="delete_dir(d.name)" style="margin-left:30px" type="error">删除</i-button>
+                    </card>
+                </i-col>
+            </div>
+
+            <div v-if="have_file" >
+                <Divider offset="2" orientation="right" style="font-size:20px">文件</Divider>
+                <i-col v-for="d in file" v-show="d.show" span="5" offset="2">
+                    <card style="margin-top:3px;margin-bottom: 10px">
+                        <div slot="title">
+                            <img :src="d.img" style="width:25px;height:25px">&nbsp;&nbsp;&nbsp;
+                            <b>文件名：<span style="margin-left:30px" v-text="d.name"></span></b>
+                        </div>
+                        <i-button @click="enter(d.name)" type="info">查看</i-button>
+                        <i-button @click="delete_dir(d.name)" style="margin-left:30px" type="error">删除</i-button>
+                    </card>
+                </i-col>
+                <br><br>
+            </div>
+        </div>
+        <!-- <Spin size="large" fix v-if="!complete"></Spin> -->
+        <drawer title="管理文件目录" :closable="false" v-model="drawer">
+            <collapse simple>
+                <panel name="new_file">
+                    新建文件
+                    <div slot="content">
+                        <p v-for="it in new_file_list">
+                            <cell-group>
+                                <span @click="show_input(it.append)">
+                                    <cell :title="it.cn" />
+                                </span>
+                            </cell-group>
+                        </p>
+                        <br>
+                        <Divider v-show="should_create"></Divider>
+                        <div v-show="should_create">
+                            <i-input v-model="new_file_name" placeholder="输入文件名.." style="width:220px">
+                                <i-button @click="close_input()" slot="prepend">
+                                    <icon type="md-close"></icon>
+                                </i-button>
+                                <span slot="append" v-text="append_text"></span>
+                            </i-input>
+                            <br>
+                            <i-button size="small" style="width:50px" @click="create_file(new_file_name+append_text)"
+                                type="primary">
+                                确定
+                            </i-button>
+                            <br><br>
+                            <alert type="error" v-show="input_error[0].bool" v-text="input_error[0].content">
+                                <icon type="ios-bulb-outline" slot="icon"></icon>
+                            </alert>
+                        </div>
+                    </div>
+                </panel>
+                <panel name="new_dir">
+                    新建文件夹
+                    <div slot="content">
+                        <i-input v-model="new_dir_name" placeholder="输入文件夹名.." style="width:220px">
+                            <i-button size="small" slot="append" style="width:50px" @click="create_dir(new_dir_name)"
+                                type="primary">
+                                确定
+                            </i-button>
+                        </i-input>
+                        <br>
+                        <alert type="error" v-show="input_error[1].bool" v-text="input_error[1].content">
+                            <icon type="ios-bulb-outline" slot="icon"></icon>
+                        </alert>
+                    </div>
+                </panel>
+            </collapse>
+            <br><br>
+
+        </drawer>
+    </div>
+</body>
+
+
+
+
+
+
+<script src="resource/vue/vue.js"></script>
+<!-- import iView -->
+<script src="resource/iview/iview.min.js"></script>
+<script src="resource/swal2/sweetalert2.all.js"></script>
+
+<script type="text/javascript" src="resource/jquery/jquery.js"></script>
+<script>
+    let app = new Vue({
+        el: "#app",
+        data: {
+            dir: [],
+            file: [],
+            stack: [],
+            search_content: "",
+            drawer: false,
+            new_file_list: [{
+                    cn: "javascript 文件",
+                    append: ".js"
+                },
+                {
+                    cn: "PHP 文件",
+                    append: ".php"
+                },
+                {
+                    cn: "Html 文件",
+                    append: ".html"
+                },
+                {
+                    cn: "Css 文件",
+                    append: ".css"
+                },
+                {
+                    cn: "txt 文件",
+                    append: ".txt"
+                }
+            ],
+            should_create: false,
+            append_text: "",
+            new_file_name: "",
+            new_dir_name: "",
+            input_error: [{
+                bool: false,
+                content: ""
+            }, {
+                bool: false,
+                content: ""
+            }],
+            file_detail: {
+                name: "",
+                size: 0,
+                time: "",
+                type: "",
+            },
+            detail_loaded: false,
+            drawer: false,
+        },
+        created() {
+            var that = this;
+            this.$Spin.show();
+            $.post("index/getdir.php").done((res) => {
+                res = JSON.parse(res);
+                data = res.data;
+                that.resize(data)
+                this.$Spin.hide();
+            })
+        },
+        watch: {
+            search_content: function () {
+                var that = this;
+                for (var i = 0; i < this.dir.length; i++) {
+                    if (that.search_content == "") {
+                        Vue.set(this.dir, i, {
+                            name: that.dir[i].name,
+                            show: true
+                        })
+                        continue;
+                    }
+
+                    if (this.dir[i].name.match(this.search_content)) {
+                        Vue.set(this.dir, i, {
+                            name: that.dir[i].name,
+                            show: true
+                        })
+                    } else {
+                        Vue.set(this.dir, i, {
+                            name: that.dir[i].name,
+                            show: false
+                        })
+                    }
+                }
+                for (var i = 0; i < this.file.length; i++) {
+
+                    if (that.search_content == "") {
+                        Vue.set(this.file, i, {
+                            name: that.file[i].name,
+                            img: that.file[i].img,
+                            show: true
+                        })
+                        continue;
+                    }
+
+                    if (this.file[i].name.match(this.search_content)) {
+                        Vue.set(this.file, i, {
+                            name: that.file[i].name,
+                            img: that.file[i].img,
+                            show: true
+                        })
+                    } else {
+                        Vue.set(this.file, i, {
+                            name: that.file[i].name,
+                            img: that.file[i].img,
+                            show: false
+                        })
+                    }
+                }
+            }
+        },
+        computed: {
+            need_back: function () {
+                if (this.stack.length > 0) return true;
+                else return false;
+            },
+            total_dir: function () {
+                var d = "";
+                for (var i = 0; i < this.stack.length; i++) {
+                    d += this.stack[i] + "/"
+                }
+                return "localhost/" + d
+            },
+            have_file: function () {
+                if (this.file.length > 0) return true;
+                else return false;
+            },
+            have_dir: function () {
+                if (this.dir.length > 0) return true;
+                else return false;
+            }
+        },
+        methods: {
+            hide(mode){
+                if(mode == "dir"){
+                    
+                }
+            },
+            get_info(dir) {
+                var that = this;
+                that.detail_loaded = false;
+                var m = ""
+                for (var i = 0; i < that.stack.length; i++) {
+                    m += that.stack[i] + "/"
+                }
+                $.post("index/getsize.php", {
+                    path: m + dir
+                }).done((res) => {
+                    res = JSON.parse(res);
+                    if (res.status == 1) {
+                        that.detail_loaded = true;
+                        that.file_detail.size = res.info.size;
+                        that.file_detail.time = res.info.createtime;
+                        that.file_detail.type = res.info.type;
+                        that.file_detail.name = dir
+                    }
+                })
+            },
+            show_input(append) {
+                this.should_create = true
+                Vue.set(this.input_error, 0, {
+                    bool: false,
+                    content: ""
+                })
+                this.new_file_name = ""
+                this.append_text = append;
+            },
+            close_input() {
+                this.should_create = false
+            },
+            create_file(name) {
+                var that = this;
+                if (this.new_file_name == "") Vue.set(this.input_error, 0, {
+                    bool: true,
+                    content: "文件名不能为空"
+                })
+                else {
+                    Vue.set(this.input_error, 0, {
+                        bool: false,
+                        content: ""
+                    });
+                    $.post("index/create.php", {
+                        name: that.getpath() + name,
+                        mode: 0
+                    }).done((res) => {
+                        res = JSON.parse(res);
+                        if (res.status == 1) {
+                            that.drawer = false;
+                            that.close_input();
+                            that.enter("")
+                        } else {
+                            Vue.set(this.input_error, 0, {
+                                bool: true,
+                                content: "该文件已经存在"
+                            })
+                        }
+                    })
+                }
+            },
+            create_dir(name) {
+                var that = this;
+                if (name == "") Vue.set(this.input_error, 1, {
+                    bool: true,
+                    content: "文件夹名不能为空"
+                });
+                else {
+                    Vue.set(this.input_error, 1, {
+                        bool: false,
+                        content: ""
+                    });
+                    $.post("index/create.php", {
+                        name: that.getpath() + name,
+                        mode: 1
+                    }).done((res) => {
+                        res = JSON.parse(res);
+                        if (res.status == 1) {
+                            that.drawer = false;
+                            that.close_input();
+                            that.enter("")
+                        } else {
+                            Vue.set(this.input_error, 0, {
+                                bool: true,
+                                content: "文件夹名称重复"
+                            })
+                        }
+                    })
+                }
+            },
+            delete_dir(d) {
+                var that = this;
+                swal({
+                    title: '确认删除该 文件/文件夹 吗？',
+                    text: '',
+                    type: 'question',
+                    allowOutsideClick: false,
+                    showCancelButton: true,
+                    confirmButtonColor: '#93c47d',
+                    cancelButtonColor: '#ca5943',
+                    confirmButtonText: "确认",
+                    cancelButtonText: "取消"
+                }).then((result) => {
+                    if (result.value) {
+                        swal({
+                            title: '正在处理',
+                            text: '',
+                            allowOutsideClick: false,
+                            showConfirmButton: false,
+                            showCloseButton: false,
+                            onOpen: () => {
+                                swal.showLoading()
+                            }
+                        })
+                        m = ""
+                        for (var i = 0; i < that.stack.length; i++) {
+                            m += that.stack[i] + "/"
+                        }
+                        $.post('index/unlink.php', {
+                            dir: m + d
+                        }).done((res) => {
+                            res = JSON.parse(res);
+                            if (res.status == 1) {
+                                swal({
+                                    title: '删除完毕',
+                                    text: '',
+                                    type: 'success',
+                                }).then((result) => {
+                                    if (result.value) {
+                                        that.enter("");
+                                    }
+                                })
+                            }
+                        })
+                    }
+
+                })
+            },
+            empty() {
+                if (!this.have_dir && !this.have_file) return true;
+                else return false;
+            },
+            getpath() {
+                var m = "",
+                    that = this;
+                for (var i = 0; i < that.stack.length; i++) {
+                    m += that.stack[i] + "/"
+                }
+                return m;
+            },
+            back() {
+                var that = this;
+                this.$Spin.show();
+                this.stack.pop();
+                var d = "";
+                for (var i = 0; i < this.stack.length; i++) {
+                    d += this.stack[i] + "/"
+                }
+                d = d.substring(0, d.length - 1)
+
+                $.post("index/getdir.php", {
+                    path: d
+                }).done((res) => {
+                    res = JSON.parse(res);
+                    data = res.data;
+                    that.resize(data);
+                    that.$Spin.hide();
+                })
+            },
+            enter(d) {
+                var that = this
+                reg = /\.[a-zA-Z]+/i
+                polish = d.match(reg)
+                if (polish != null) {
+                    m = ""
+                    for (var i = 0; i < that.stack.length; i++) {
+                        m += that.stack[i] + "/"
+                    }
+                    window.location.href = "./" + m + d
+                } else {
+                    this.$Spin.show();
+
+                    //d为空时表示重新加载当前路径文件
+                    if (d != "")
+                        that.stack.push(d);
+                    d = ""
+                    for (var i = 0; i < that.stack.length; i++) {
+                        d += that.stack[i] + "/"
+                    }
+                    d = d.substring(0, d.length - 1)
+                    $.post("index/getdir.php", {
+                        path: d
+                    }).done((res) => {
+                        res = JSON.parse(res);
+                        data = res.data;
+                        that.resize(data);
+                        that.$Spin.hide();
+
+                    })
+                }
+            },
+            resize(source) {
+                var that = this;
+                while (that.dir.length > 0) {
+                    that.dir.pop()
+                }
+                while (that.file.length > 0) {
+                    that.file.pop()
+                }
+                for (var i = 0; i < source.length; i++) {
+                    reg = /\.[^\.]+/g
+                    check = /[a-zA-z0-9\u4e00-\u9fa5\.]+\./g
+                    polish = source[i].name.match(reg)
+                    polish2 = source[i].name.match(check)
+                    if (polish != null && polish2 != null) {
+                        img = "";
+                        switch (polish[polish.length - 1]) {
+                            case ".js":
+                                img = "index/js.png"
+                                break;
+                            case ".html":
+                                img = "index/html.png"
+                                break;
+                            case ".css":
+                                img = "index/css.png"
+                                break;
+                            case ".php":
+                                img = "index/php.png"
+                                break;
+                            case ".txt":
+                                img = "index/txt.png"
+                                break;
+                            case ".rar":
+                                img = "index/rar.png"
+                                break;
+                            case ".jpg":
+                                img = "index/jpg.png"
+                                break;
+                            case ".json":
+                                img = "index/json.png"
+                                break;
+                            case ".md":
+                                img = "index/md.png"
+                                break;
+                            case ".sql":
+                                img = "index/sql.png"
+                                break;
+                            default:
+                                img = "index/default.png"
+                                break;
+                        }
+                        that.file.push({
+                            name: source[i].name,
+                            show: true,
+                            img: img
+                        })
+                    } else {
+                        that.dir.push({
+                            name: source[i].name,
+                            show: true
+                        });
+                    }
+                }
+            }
+        }
+    })
+</script>
