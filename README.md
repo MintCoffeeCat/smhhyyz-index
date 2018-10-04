@@ -26,7 +26,7 @@
 - JQuery
 - SweetAlert 2
 # 使用方法
-- 将index放在服务器根目录下即可
+- 将所有文件和文件夹放在服务器根目录下即可
  ![目录](index/readme.png)
  ![效果](index/readme2.png)
 
